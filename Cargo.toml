@@ -1,0 +1,48 @@
+[package]
+name = "notar-verify"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.79"
+authors = ["Maxime Guillemin <guimaxali@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "CLI de vérification d’intégrité et de signatures (PDF PAdES, CMS/P7S) avec rapport JSON lisible."
+repository = "https://github.com/votre-org/notar-verify"
+keywords = ["pdf", "pades", "cms", "pkcs7", "x509", "verification", "ocsp", "crl"]
+categories = ["command-line-utilities", "cryptography", "security"]
+
+[features]
+default = []
+openssl-backend = ["dep:openssl"]
+online = ["dep:reqwest"]
+
+[dependencies]
+anyhow = "^1.0"
+clap = { version = "^4.5", features = ["derive"] }
+tracing = "^0.1"
+tracing-subscriber = { version = "^0.3", features = ["env-filter", "fmt"] }
+serde = { version = "^1.0", features = ["derive"] }
+serde_json = "^1.0"
+time = { version = "^0.3", features = ["formatting"] }
+base64 = "^0.22"
+data-encoding = "^2.6" # utile si besoin (hex/base16)
+sha2 = "^0.10"
+lopdf = "^0.32"
+hex = "^0.4"
+thiserror = "^1.0"
+comfy-table = "^7.1"
+
+# Optionnel: pile OpenSSL pour vérification CMS/X.509 étendue
+openssl = { version = "^0.10", optional = true }
+
+# Online (opt-in)
+reqwest = { version = "^0.12", default-features = false, features = ["rustls-tls"], optional = true }
+
+[dev-dependencies]
+insta = { version = "^1.39", features = ["yaml"] }
+proptest = "^1.5"
+assert_cmd = "^2.0"
+tempfile = "^3.10"
+
+[profile.release]
+lto = true
+codegen-units = 1
