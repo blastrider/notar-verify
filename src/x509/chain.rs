@@ -9,7 +9,10 @@ pub struct ChainResult {
 pub fn validate_chain_openssl(_anchors_pem: &[String]) -> ChainResult {
     // MVP: la vérification de chaîne avancée est généralement couverte lors de la vérif PKCS7.
     ChainResult {
-        component: Component { status: ReportVerdict::Warning, detail: "Chaîne validée via PKCS#7 (détails à enrichir)".into() },
+        component: Component {
+            status: ReportVerdict::Warning,
+            detail: "Chaîne validée via PKCS#7 (détails à enrichir)".into(),
+        },
         subjects: vec![],
     }
 }
@@ -17,7 +20,10 @@ pub fn validate_chain_openssl(_anchors_pem: &[String]) -> ChainResult {
 #[cfg(not(feature = "openssl-backend"))]
 pub fn validate_chain_openssl(_anchors_pem: &[String]) -> ChainResult {
     ChainResult {
-        component: Component { status: ReportVerdict::Warning, detail: "Backend X.509 non activé".into() },
+        component: Component {
+            status: ReportVerdict::Warning,
+            detail: "Backend X.509 non activé".into(),
+        },
         subjects: vec![],
     }
 }

@@ -1,0 +1,30 @@
+{
+  "input_kind": "CMS",
+  "algorithms": [],
+  "signer_dn": null,
+  "certificate_chain": [],
+  "signing_time": null,
+  "timestamp_rfc3161": null,
+  "revocation": {
+    "status": "WARNING",
+    "detail": ""
+  },
+  "integrity": {
+    "status": "WARNING",
+    "detail": ""
+  },
+  "signature": {
+    "status": "WARNING",
+    "detail": "Pile native CMS non activée : utilisez --features openssl-backend pour une vérification cryptographique complète."
+  },
+  "chain": {
+    "status": "WARNING",
+    "detail": "Validation de chaîne limitée sans backend X.509 avancé."
+  },
+  "ltv": {
+    "status": "WARNING",
+    "detail": ""
+  },
+  "verdict": "WARNING",
+  "document_sha256": "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447"
+}

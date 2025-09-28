@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
@@ -9,13 +9,17 @@ pub struct Limits {
 
 impl Limits {
     pub fn from_mib(mib: u64) -> Self {
-        Self { max_bytes: mib * 1024 * 1024 }
+        Self {
+            max_bytes: mib * 1024 * 1024,
+        }
     }
 }
 
 fn normalize(path: &str) -> Result<PathBuf> {
     let pb = PathBuf::from(path);
-    let abs = pb.canonicalize().with_context(|| format!("Chemin invalide: {path}"))?;
+    let abs = pb
+        .canonicalize()
+        .with_context(|| format!("Chemin invalide: {path}"))?;
     let s = abs.to_string_lossy();
     if s.contains("..") {
         bail!("Traversal détecté");

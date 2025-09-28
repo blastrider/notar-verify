@@ -1,20 +1,24 @@
 #![forbid(unsafe_code)]
 
-mod infra;
-mod report;
 mod cms;
+mod infra;
 mod pdf;
-mod x509;
+mod report;
 mod revocation;
+mod x509;
 
 use anyhow::{Context, Result};
 use clap::{ArgAction, Parser};
-use report::{ExitCode, Report, ReportVerdict};
+use report::{ExitCode, ReportVerdict};
 use tracing::{debug, info};
 use tracing_subscriber::{fmt, EnvFilter};
 
 #[derive(Parser, Debug)]
-#[command(name = "notar-verify", version, about = "Vérifie l’intégrité & signatures (PDF PAdES, CMS/P7S). Offline par défaut.")]
+#[command(
+    name = "notar-verify",
+    version,
+    about = "Vérifie l’intégrité & signatures (PDF PAdES, CMS/P7S). Offline par défaut."
+)]
 struct Cli {
     /// PDF signé (PAdES)
     #[arg(long, value_name = "FILE", conflicts_with = "sig")]
@@ -80,16 +84,9 @@ fn main() -> Result<()> {
         .context("Échec lecture des anchors (--trust)")?;
 
     // Dispatcher selon mode
-    let mut report = if let Some(pdf_path) = cli.r#in.as_deref() {
-        pdf::pades::verify_pdf_pades(
-            pdf_path,
-            &anchors,
-            &cli.crl,
-            &cli.ocsp,
-            cli.online,
-            &limits,
-        )
-        .context("Vérification PAdES a échoué")?
+    let report = if let Some(pdf_path) = cli.r#in.as_deref() {
+        pdf::pades::verify_pdf_pades(pdf_path, &anchors, &cli.crl, &cli.ocsp, cli.online, &limits)
+            .context("Vérification PAdES a échoué")?
     } else if let Some(sig_path) = cli.sig.as_deref() {
         cms::verify::verify_cms_entrypoint(
             sig_path,
@@ -102,7 +99,9 @@ fn main() -> Result<()> {
         )
         .context("Vérification CMS a échoué")?
     } else {
-        anyhow::bail!("Spécifiez --in <pdf> ou --sig <p7s|p7m> (avec --data si détachée). Voir --help.");
+        anyhow::bail!(
+            "Spécifiez --in <pdf> ou --sig <p7s|p7m> (avec --data si détachée). Voir --help."
+        );
     };
 
     // Rendu terminal

@@ -4,7 +4,6 @@ use crate::report::{final_verdict, Component, Report, ReportVerdict};
 use anyhow::{Context, Result};
 use lopdf::{Document, Object, ObjectId};
 use sha2::{Digest, Sha256};
-use tracing::debug;
 
 #[derive(thiserror::Error, Debug)]
 pub enum PdfErr {
@@ -25,30 +24,32 @@ pub fn verify_pdf_pades(
     limits: &Limits,
 ) -> Result<Report> {
     let pdf_bytes = read_file_bounded(pdf_path, limits)?;
-    let mut doc = Document::load_mem(&pdf_bytes).context("Chargement PDF a échoué")?;
+    let doc = Document::load_mem(&pdf_bytes).context("Chargement PDF a échoué")?;
 
-    let (sig_obj_id, sig_dict) = find_signature_dict(&doc).map_err(|_| PdfErr::NoSignature).context("Aucune signature PDF détectée")?;
-    debug!(?sig_obj_id, "Signature field trouvé");
+    let (_sig_obj_id, sig_dict) = find_signature_dict(&doc)
+        .map_err(|_| PdfErr::NoSignature)
+        .context("Aucune signature PDF détectée")?;
 
-    let byte_range = sig_dict.get(b"ByteRange").ok_or(PdfErr::NoByteRange)?;
-    let br = parse_byterange(byte_range).context("ByteRange invalide")?;
+    // API lopdf (Result<&Object, Error>)
+    let byte_range_obj = sig_dict
+        .get(b"ByteRange")
+        .map_err(|_| PdfErr::NoByteRange)?;
+    let br = parse_byterange(byte_range_obj).context("ByteRange invalide")?;
 
-    let contents = sig_dict.get(b"Contents").ok_or(PdfErr::NoContents)?;
-    let cms_blob = extract_contents(contents).context("Contents invalide")?;
+    let contents_obj = sig_dict.get(b"Contents").map_err(|_| PdfErr::NoContents)?;
+    let cms_blob = extract_contents(contents_obj).context("Contents invalide")?;
 
     // Intégrité: recomposer les segments ByteRange et hasher
     let digest_doc = sha256_over_ranges(&pdf_bytes, &br)?;
     let document_sha256 = hex::encode(digest_doc);
 
-    // Écrire CMS dans un tmp et passer par l’entrypoint CMS (uniformiser le flux)
-    // Ici on garde en mémoire sans I/O disque : passer via buffer spécialisé
-    // → on écrit sur /tmp uniquement pour l’intégration simple
+    // Écriture temporaire de la signature CMS (simplifie l’entrypoint CMS commun)
     let tmp_sig = tempfile::NamedTempFile::new().context("tmp sig")?;
     std::fs::write(tmp_sig.path(), &cms_blob).context("Écriture tmp sig")?;
 
     let mut report = verify_cms_entrypoint(
         tmp_sig.path().to_string_lossy().as_ref(),
-        Some(pdf_path), // PAdES est sémantiquement “detached” sur ByteRange
+        Some(pdf_path), // PAdES : sémantique “detached” via ByteRange
         anchors_pem,
         crl,
         ocsp,
@@ -57,18 +58,26 @@ pub fn verify_pdf_pades(
     )?;
 
     report.input_kind = "PDF".into();
-    report.integrity = Component { status: ReportVerdict::Valid, detail: "ByteRange cohérent, hash recomposé OK".into() };
+    report.integrity = Component {
+        status: ReportVerdict::Valid,
+        detail: "ByteRange cohérent, hash recomposé OK".into(),
+    };
     report.document_sha256 = Some(document_sha256);
 
-    // LTV/DSS (MVP : présence)
+    // LTV/DSS (MVP : détection)
     if let Some(_dss) = find_dss(&doc) {
-        report.ltv = Component { status: ReportVerdict::Warning, detail: "DSS présent (exploiter CRL/OCSP embarqués à implémenter)".into() };
+        report.ltv = Component {
+            status: ReportVerdict::Warning,
+            detail: "DSS présent (exploitation CRL/OCSP embarqués à implémenter)".into(),
+        };
     } else {
-        report.ltv = Component { status: ReportVerdict::Warning, detail: "DSS absent".into() };
+        report.ltv = Component {
+            status: ReportVerdict::Warning,
+            detail: "DSS absent".into(),
+        };
     }
 
-    // Horodatage (MVP: lecture SigningTime dans CMS côté verify_cms → non implémenté)
-    // report.timestamp_rfc3161 = ...
+    // (Horodatage CMS à compléter côté cms::verify)
 
     final_verdict(&mut report);
     Ok(report)
@@ -77,15 +86,8 @@ pub fn verify_pdf_pades(
 fn find_signature_dict(doc: &Document) -> Result<(ObjectId, lopdf::Dictionary)> {
     for (id, obj) in &doc.objects {
         if let Ok(dict) = obj.as_dict() {
-            if let Some(Object::Name(subtype)) = dict.get(b"Subtype") {
-                if subtype == b"Widget" {
-                    if let Some(Object::Dictionary(annot)) = dict.get(b"AP") {
-                        let _ = annot; // non requis ici
-                    }
-                }
-            }
-            if let Some(Object::Dictionary(v)) = dict.get(b"V") {
-                // v est le dictionnaire de signature
+            // Chercher l’entrée V (valeur de signature)
+            if let Ok(Object::Dictionary(v)) = dict.get(b"V") {
                 return Ok((*id, v.clone()));
             }
         }
@@ -112,7 +114,8 @@ fn parse_byterange(obj: &Object) -> Result<Vec<(usize, usize)>> {
 
 fn extract_contents(obj: &Object) -> Result<Vec<u8>> {
     match obj {
-        Object::String(s, _) => Ok(s.clone().into_bytes()),
+        // Selon lopdf, String garde les octets; `bytes()` expose les données.
+        Object::String(s, _) => Ok(s.clone()),
         Object::Stream(stm) => Ok(stm.content.clone()),
         _ => Err(anyhow::anyhow!("Contents inattendu")),
     }
@@ -122,18 +125,23 @@ fn sha256_over_ranges(pdf: &[u8], ranges: &[(usize, usize)]) -> Result<Vec<u8>> 
     let mut h = Sha256::new();
     for (off, len) in ranges {
         let end = off.saturating_add(*len);
-        if end > pdf.len() { return Err(anyhow::anyhow!("ByteRange hors limites")); }
+        if end > pdf.len() {
+            return Err(anyhow::anyhow!("ByteRange hors limites"));
+        }
         h.update(&pdf[*off..end]);
     }
     Ok(h.finalize().to_vec())
 }
 
 fn find_dss(doc: &Document) -> Option<lopdf::Dictionary> {
-    // Heuristique: recherche d’un objet nommé DSS (ETSI)
     for (_id, obj) in &doc.objects {
         if let Ok(dict) = obj.as_dict() {
-            if dict.get(b"Type").and_then(|o| o.as_name().ok()).map(|n| n == b"DSS").unwrap_or(false) {
-                return Some(dict.clone());
+            if let Ok(typ) = dict.get(b"Type") {
+                if let Ok(name) = typ.as_name() {
+                    if name == b"DSS" {
+                        return Some(dict.clone());
+                    }
+                }
             }
         }
     }

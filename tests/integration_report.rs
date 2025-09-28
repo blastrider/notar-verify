@@ -13,9 +13,12 @@ fn cli_shows_warning_without_backend() {
 
     let mut cmd = Command::cargo_bin("notar-verify").unwrap();
     let assert = cmd
-        .arg("--sig").arg(sig)
-        .arg("--data").arg(data)
-        .arg("--out").arg(&out)
+        .arg("--sig")
+        .arg(sig)
+        .arg("--data")
+        .arg(data)
+        .arg("--out")
+        .arg(&out)
         .assert();
 
     assert.success(); // le binaire sort avec code 2 (Warning) mais assert_cmd considère succès (0). On ne peut pas lire le code ici simplement.

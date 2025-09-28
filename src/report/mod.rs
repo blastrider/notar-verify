@@ -17,6 +17,12 @@ pub enum ReportVerdict {
     Warning,
 }
 
+impl Default for ReportVerdict {
+    fn default() -> Self {
+        ReportVerdict::Warning
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Component {
     pub status: ReportVerdict,
@@ -42,12 +48,24 @@ pub struct Report {
 
 pub fn print_table(r: &Report) {
     let mut t = Table::new();
-    t.set_header(vec!["Intégrité","Signature","Certificat/Chaîne","Horodatage","Révocation","LTV","Verdict"]);
+    t.set_header(vec![
+        "Intégrité",
+        "Signature",
+        "Certificat/Chaîne",
+        "Horodatage",
+        "Révocation",
+        "LTV",
+        "Verdict",
+    ]);
     t.add_row(vec![
         Cell::new(format!("{:?}", r.integrity.status)),
         Cell::new(format!("{:?}", r.signature.status)),
         Cell::new(format!("{:?}", r.chain.status)),
-        Cell::new(r.timestamp_rfc3161.clone().unwrap_or_else(|| "-".to_string())),
+        Cell::new(
+            r.timestamp_rfc3161
+                .clone()
+                .unwrap_or_else(|| "-".to_string()),
+        ),
         Cell::new(format!("{:?}", r.revocation.status)),
         Cell::new(format!("{:?}", r.ltv.status)),
         Cell::new(format!("{:?}", r.verdict)),
@@ -63,19 +81,22 @@ pub fn write_json(r: &Report, path: &str) -> anyhow::Result<()> {
 
 pub fn final_verdict(r: &mut Report) {
     use ReportVerdict::*;
-    let mut worst = Valid;
-    for s in [
-        r.integrity.status.clone(),
-        r.signature.status.clone(),
-        r.chain.status.clone(),
-        r.revocation.status.clone(),
-        r.ltv.status.clone(),
-    ] {
-        worst = match (worst, s) {
-            (Invalid, _) | (_, Invalid) => Invalid,
-            (Warning, _) | (_, Warning) => Warning,
-            _ => Valid,
-        };
+
+    // Critères essentiels
+    let sig = &r.signature.status;
+    let integ = &r.integrity.status;
+    let chain = &r.chain.status;
+
+    if matches!(sig, Invalid) || matches!(integ, Invalid) || matches!(chain, Invalid) {
+        r.verdict = Invalid;
+        return;
     }
-    r.verdict = worst;
+
+    if matches!(sig, Valid) && matches!(integ, Valid) && matches!(chain, Valid) {
+        r.verdict = Valid;
+        return;
+    }
+
+    // Le reste (revocation/LTV non évalués) => Warning
+    r.verdict = Warning;
 }
