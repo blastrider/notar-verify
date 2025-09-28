@@ -1,5 +1,5 @@
 use crate::report::{Component, ReportVerdict};
-
+#[allow(dead_code)]
 pub struct ChainResult {
     pub component: Component,
     pub subjects: Vec<String>,
@@ -17,6 +17,7 @@ pub fn validate_chain_openssl(_anchors_pem: &[String]) -> ChainResult {
     }
 }
 
+#[allow(dead_code)]
 #[cfg(not(feature = "openssl-backend"))]
 pub fn validate_chain_openssl(_anchors_pem: &[String]) -> ChainResult {
     ChainResult {

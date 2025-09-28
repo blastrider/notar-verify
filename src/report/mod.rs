@@ -4,9 +4,9 @@ use std::fs;
 
 #[derive(Clone, Copy, Debug)]
 pub enum ExitCode {
-    VALID = 0,
-    INVALID = 1,
-    WARNING = 2,
+    Valid = 0,
+    Invalid = 1,
+    Warning = 2,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

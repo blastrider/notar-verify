@@ -8,11 +8,11 @@ use sha2::{Digest, Sha256};
 #[derive(thiserror::Error, Debug)]
 pub enum PdfErr {
     #[error("Champ de signature PDF introuvable")]
-    NoSignature,
+    SignatureMissing,
     #[error("ByteRange manquant ou invalide")]
-    NoByteRange,
+    ByteRangeMissing,
     #[error("Contents manquant")]
-    NoContents,
+    ContentsMissing,
 }
 
 pub fn verify_pdf_pades(
@@ -27,16 +27,18 @@ pub fn verify_pdf_pades(
     let doc = Document::load_mem(&pdf_bytes).context("Chargement PDF a échoué")?;
 
     let (_sig_obj_id, sig_dict) = find_signature_dict(&doc)
-        .map_err(|_| PdfErr::NoSignature)
+        .map_err(|_| PdfErr::SignatureMissing)
         .context("Aucune signature PDF détectée")?;
 
     // API lopdf (Result<&Object, Error>)
     let byte_range_obj = sig_dict
         .get(b"ByteRange")
-        .map_err(|_| PdfErr::NoByteRange)?;
+        .map_err(|_| PdfErr::ByteRangeMissing)?;
     let br = parse_byterange(byte_range_obj).context("ByteRange invalide")?;
 
-    let contents_obj = sig_dict.get(b"Contents").map_err(|_| PdfErr::NoContents)?;
+    let contents_obj = sig_dict
+        .get(b"Contents")
+        .map_err(|_| PdfErr::ContentsMissing)?;
     let cms_blob = extract_contents(contents_obj).context("Contents invalide")?;
 
     // Intégrité: recomposer les segments ByteRange et hasher
@@ -86,7 +88,6 @@ pub fn verify_pdf_pades(
 fn find_signature_dict(doc: &Document) -> Result<(ObjectId, lopdf::Dictionary)> {
     for (id, obj) in &doc.objects {
         if let Ok(dict) = obj.as_dict() {
-            // Chercher l’entrée V (valeur de signature)
             if let Ok(Object::Dictionary(v)) = dict.get(b"V") {
                 return Ok((*id, v.clone()));
             }
@@ -134,7 +135,7 @@ fn sha256_over_ranges(pdf: &[u8], ranges: &[(usize, usize)]) -> Result<Vec<u8>> 
 }
 
 fn find_dss(doc: &Document) -> Option<lopdf::Dictionary> {
-    for (_id, obj) in &doc.objects {
+    for obj in doc.objects.values() {
         if let Ok(dict) = obj.as_dict() {
             if let Ok(typ) = dict.get(b"Type") {
                 if let Ok(name) = typ.as_name() {

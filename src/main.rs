@@ -115,8 +115,8 @@ fn main() -> Result<()> {
 
     // Codes de sortie
     std::process::exit(match report.verdict {
-        ReportVerdict::Valid => ExitCode::VALID as i32,
-        ReportVerdict::Invalid => ExitCode::INVALID as i32,
-        ReportVerdict::Warning => ExitCode::WARNING as i32,
+        ReportVerdict::Valid => ExitCode::Valid as i32,
+        ReportVerdict::Invalid => ExitCode::Invalid as i32,
+        ReportVerdict::Warning => ExitCode::Warning as i32,
     });
 }

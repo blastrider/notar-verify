@@ -1,5 +1,6 @@
 use crate::report::{Component, ReportVerdict};
 
+#[allow(dead_code)]
 pub fn evaluate_revocation_offline(_crl: &[String], _ocsp: &[String]) -> Component {
     // MVP: prise en compte future (CRL/OCSP fournis en fichiers)
     Component {
@@ -8,6 +9,7 @@ pub fn evaluate_revocation_offline(_crl: &[String], _ocsp: &[String]) -> Compone
     }
 }
 
+#[allow(dead_code)]
 pub async fn evaluate_revocation_online(_urls: &[String]) -> Component {
     // MVP online: placeholder, appels HTTP à implémenter avec timeouts
     Component {

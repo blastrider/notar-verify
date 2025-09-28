@@ -14,7 +14,6 @@ mod openssl_impl {
     use openssl::x509::{store::X509StoreBuilder, X509NameRef, X509};
 
     fn x509_cn_or_first(n: &X509NameRef) -> String {
-        // 1) Essayer le CN
         if let Some(cn) = n.entries_by_nid(Nid::COMMONNAME).next() {
             return cn
                 .data()
@@ -22,7 +21,6 @@ mod openssl_impl {
                 .map(|s| s.to_string())
                 .unwrap_or_else(|_| String::new());
         }
-        // 2) Sinon, première entrée lisible
         n.entries()
             .next()
             .and_then(|e| e.data().as_utf8().ok())
@@ -30,29 +28,28 @@ mod openssl_impl {
             .unwrap_or_default()
     }
 
-    /// Vérifie un PKCS#7 **détaché**. Retourne (subjects des signers, signer_dn principal).
+    /// Vérifie un PKCS#7 détaché et retourne (subjects des signataires, DN principal).
     pub fn verify_detached(
         sig_der: &[u8],
         data: &[u8],
         anchors_pem: &[String],
-    ) -> Result<(Vec<String>, Option<String>)> {
+    ) -> anyhow::Result<(Vec<String>, Option<String>)> {
+        // 1) PKCS#7
         let pkcs7 = Pkcs7::from_der(sig_der).context("PKCS#7 DER invalide")?;
 
-        // Store de confiance depuis --trust
+        // 2) Store d’ancrages
         let mut store_bld = X509StoreBuilder::new().context("init X509StoreBuilder")?;
         for pem in anchors_pem {
             for crt in X509::stack_from_pem(pem.as_bytes()).context("anchors PEM invalides")? {
-                store_bld
-                    .add_cert(crt)
-                    .context("ajout d’un certificat d’ancrage")?;
+                store_bld.add_cert(crt).context("ajout anchor")?;
             }
         }
         let store = store_bld.build();
 
-        // Pile additionnelle vide (on s’appuie sur les certs internes si présents)
+        // 3) Pile additionnelle vide
         let extra = Stack::<X509>::new().context("init stack X509")?;
 
-        // Vérification détachée : data en entrée, sink inutile
+        // 4) Vérif détachée
         let mut sink = Vec::<u8>::new();
         pkcs7
             .verify(
@@ -64,19 +61,33 @@ mod openssl_impl {
             )
             .map_err(|e| anyhow::anyhow!("Signature PKCS#7 non valide: {e}"))?;
 
-        // Récupérer les signataires (Rust-openssl wrappe PKCS7_get0_signers)
+        // 5) Signataires
         let signers = pkcs7
             .signers(&extra, Pkcs7Flags::empty())
             .context("Extraction des signataires")?;
+
         let mut subjects = Vec::new();
         let mut signer_dn: Option<String> = None;
 
-        for (i, cert) in signers.iter().enumerate() {
-            let dn = x509_cn_or_first(cert.subject_name());
-            if i == 0 {
-                signer_dn = Some(dn.clone());
+        if !signers.is_empty() {
+            for (i, cert) in signers.iter().enumerate() {
+                let dn = x509_cn_or_first(cert.subject_name());
+                if i == 0 {
+                    signer_dn = Some(dn.clone());
+                }
+                subjects.push(dn);
             }
-            subjects.push(dn);
+        } else {
+            // Fallback: pas de certs embarqués → utiliser les anchors pour remplir informativement
+            for pem in anchors_pem {
+                for crt in X509::stack_from_pem(pem.as_bytes()).context("anchors PEM invalides")? {
+                    let dn = x509_cn_or_first(crt.subject_name());
+                    if signer_dn.is_none() {
+                        signer_dn = Some(dn.clone());
+                    }
+                    subjects.push(dn);
+                }
+            }
         }
 
         Ok((subjects, signer_dn))
@@ -104,14 +115,12 @@ pub fn verify_cms_entrypoint(
         ..Default::default()
     };
 
-    // Empreinte document si data
     if let Some(ref dat) = data {
         let mut h = Sha256::new();
         h.update(dat);
         r.document_sha256 = Some(hex::encode(h.finalize()));
     }
 
-    // Tentative de décodage si Base64 (courant pour .p7s)
     let sig_der = if sig.starts_with(b"-----BEGIN") {
         let s = String::from_utf8(sig.clone()).context("P7S PEM non UTF-8")?;
         extract_pem_block(&s, "PKCS7")?
@@ -122,101 +131,97 @@ pub fn verify_cms_entrypoint(
         }
     };
 
-    let _ = &sig_der;
-
-    #[cfg(feature = "openssl-backend")]
-    mod openssl_impl {
-        use super::*;
-        use openssl::nid::Nid;
-        use openssl::pkcs7::{Pkcs7, Pkcs7Flags};
-        use openssl::stack::Stack;
-        use openssl::x509::{store::X509StoreBuilder, X509NameRef, X509};
-
-        fn x509_cn_or_first(n: &X509NameRef) -> String {
-            if let Some(cn) = n.entries_by_nid(Nid::COMMONNAME).next() {
-                return cn.data().as_utf8().to_string();
-            }
-            n.entries()
-                .next()
-                .and_then(|e| e.data().as_utf8().ok())
-                .map(|s| s.to_string())
-                .unwrap_or_default()
-        }
-
-        /// Vérifie un PKCS#7 **détaché** et retourne (sujets des signataires, DN principal).
-        pub fn verify_detached(
-            sig_der: &[u8],
-            data: &[u8],
-            anchors_pem: &[String],
-        ) -> anyhow::Result<(Vec<String>, Option<String>)> {
-            // 1) Charger PKCS#7
-            let pkcs7 = Pkcs7::from_der(sig_der).context("PKCS#7 DER invalide")?;
-
-            // 2) Construire le store d’anchors (--trust)
-            let mut store_bld = X509StoreBuilder::new().context("init X509StoreBuilder")?;
-            for pem in anchors_pem {
-                for crt in X509::stack_from_pem(pem.as_bytes()).context("anchors PEM invalides")? {
-                    store_bld.add_cert(crt).context("ajout anchor")?;
-                }
-            }
-            let store = store_bld.build();
-
-            // 3) Extra = pile vide (on s’appuie sur les certs internes)
-            let extra = Stack::<X509>::new().context("init stack X509")?;
-
-            // 4) Vérification (detached)
-            let mut sink = Vec::<u8>::new();
-            pkcs7
-                .verify(
-                    &extra,
-                    &store,
-                    Some(data),
-                    Some(&mut sink),
-                    Pkcs7Flags::BINARY,
-                )
-                .map_err(|e| anyhow::anyhow!("Signature PKCS#7 non valide: {e}"))?;
-
-            // 5) Récupérer les signataires (Stack<X509>)
-            let signers = pkcs7
-                .signers(&extra, Pkcs7Flags::empty())
-                .context("Extraction des signataires")?;
-
-            let mut subjects = Vec::new();
-            let mut signer_dn = None;
-
-            for (i, cert) in signers.iter().enumerate() {
-                let subj = x509_cn_or_first(cert.subject_name());
-                if i == 0 {
-                    signer_dn = Some(subj.clone());
-                }
-                subjects.push(subj);
-            }
-
-            Ok((subjects, signer_dn))
-        }
+    #[cfg(not(feature = "openssl-backend"))]
+    {
+        let _ = &sig_der;
+        let _ = anchors_pem;
     }
 
-    // Sans backend OpenSSL → verdict conservateur
-    #[cfg(not(feature = "openssl-backend"))]
-    let _ = anchors_pem; // éviter warning d’inutilisation
+    // --- Branche OpenSSL ----------------------------------------------------
+    #[cfg(feature = "openssl-backend")]
+    {
+        if let Some(ref dat) = data {
+            match openssl_impl::verify_detached(&sig_der, dat, anchors_pem) {
+                Ok((chain_dns, signer_dn)) => {
+                    r.signature = Component {
+                        status: ReportVerdict::Valid,
+                        detail: "PKCS#7 détaché valide".into(),
+                    };
+                    r.integrity = Component {
+                        status: ReportVerdict::Valid,
+                        detail: "MessageDigest/Data vérifiés".into(),
+                    };
+                    if !anchors_pem.is_empty() {
+                        r.chain = Component {
+                            status: ReportVerdict::Valid,
+                            detail: "Chaîne vérifiée contre les anchors fournis".into(),
+                        };
+                    } else {
+                        r.chain = Component {
+                            status: ReportVerdict::Warning,
+                            detail: "Aucun anchor fourni (--trust), chaîne non attestée".into(),
+                        };
+                    }
+                    r.signer_dn = signer_dn;
+                    r.certificate_chain = chain_dns;
 
-    r.signature = Component {
-        status: ReportVerdict::Warning,
-        detail: "Pile native CMS non activée : utilisez --features openssl-backend pour une vérification cryptographique complète.".into(),
-    };
-    r.chain = Component {
-        status: ReportVerdict::Warning,
-        detail: "Validation de chaîne limitée sans backend X.509 avancé.".into(),
-    };
-    final_verdict(&mut r);
-    Ok(r)
+                    r.revocation = Component {
+                        status: ReportVerdict::Warning,
+                        detail: "Non évaluée (offline par défaut)".into(),
+                    };
+                    r.ltv = Component {
+                        status: ReportVerdict::Warning,
+                        detail: "Non applicable (CMS détaché)".into(),
+                    };
+                }
+                Err(e) => {
+                    r.signature = Component {
+                        status: ReportVerdict::Invalid,
+                        detail: format!("Échec vérif PKCS#7: {e}"),
+                    };
+                    r.chain = Component {
+                        status: ReportVerdict::Warning,
+                        detail: "Chaîne non évaluée".into(),
+                    };
+                }
+            }
+        } else {
+            r.signature = Component {
+                status: ReportVerdict::Warning,
+                detail: "P7M enveloppé non implémenté dans MVP".into(),
+            };
+        }
+        final_verdict(&mut r);
+        return Ok(r);
+    }
+
+    // --- Branche SANS OpenSSL -----------------------------------------------
+    #[cfg(not(feature = "openssl-backend"))]
+    {
+        let _ = &sig_der; // éviter unused
+        let _ = anchors_pem;
+
+        r.signature = Component {
+            status: ReportVerdict::Warning,
+            detail: "Pile native CMS non activée : utilisez --features openssl-backend pour une vérification cryptographique complète.".into(),
+        };
+        r.chain = Component {
+            status: ReportVerdict::Warning,
+            detail: "Validation de chaîne limitée sans backend X.509 avancé.".into(),
+        };
+        r.revocation.detail = "Non évaluée (MVP offline)".into();
+        r.ltv.detail = "Non applicable (CMS détaché)".into();
+
+        final_verdict(&mut r);
+        return Ok(r);
+    }
 }
 
 fn extract_pem_block(pem: &str, _label: &str) -> Result<Vec<u8>> {
     let start = pem
         .find("-----BEGIN")
         .context("Bloc PEM BEGIN introuvable")?;
-    let _ = pem.find("-----END").context("Bloc PEM END introuvable")?;
+    let _end = pem.find("-----END").context("Bloc PEM END introuvable")?;
     let inner = &pem[start..]
         .lines()
         .skip(1)

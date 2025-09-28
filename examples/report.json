@@ -1,30 +1,32 @@
 {
   "input_kind": "CMS",
   "algorithms": [],
-  "signer_dn": null,
-  "certificate_chain": [],
+  "signer_dn": "Demo Signer",
+  "certificate_chain": [
+    "Demo Signer"
+  ],
   "signing_time": null,
   "timestamp_rfc3161": null,
   "revocation": {
     "status": "WARNING",
-    "detail": ""
+    "detail": "Non évaluée (offline par défaut)"
   },
   "integrity": {
-    "status": "WARNING",
-    "detail": ""
+    "status": "VALID",
+    "detail": "MessageDigest/Data vérifiés"
   },
   "signature": {
-    "status": "WARNING",
-    "detail": "Pile native CMS non activée : utilisez --features openssl-backend pour une vérification cryptographique complète."
+    "status": "VALID",
+    "detail": "PKCS#7 détaché valide"
   },
   "chain": {
-    "status": "WARNING",
-    "detail": "Validation de chaîne limitée sans backend X.509 avancé."
+    "status": "VALID",
+    "detail": "Chaîne vérifiée contre les anchors fournis"
   },
   "ltv": {
     "status": "WARNING",
-    "detail": ""
+    "detail": "Non applicable (CMS détaché)"
   },
-  "verdict": "WARNING",
+  "verdict": "VALID",
   "document_sha256": "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447"
 }
