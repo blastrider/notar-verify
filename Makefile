@@ -7,7 +7,7 @@ lint:
 	cargo clippy --all-features -- -D warnings
 
 test:
-	cargo test --all-features -- --nocapture
+	cargo test --all --locked
 
 build:
 	cargo build --release
