@@ -9,18 +9,14 @@ pub enum ExitCode {
     Warning = 2,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ReportVerdict {
     Valid,
     Invalid,
+    #[default]
     Warning,
-}
-
-impl Default for ReportVerdict {
-    fn default() -> Self {
-        ReportVerdict::Warning
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

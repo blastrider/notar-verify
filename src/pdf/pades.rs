@@ -8,12 +8,13 @@ use sha2::{Digest, Sha256};
 #[derive(thiserror::Error, Debug)]
 pub enum PdfErr {
     #[error("Champ de signature PDF introuvable")]
-    SignatureMissing,
+    Signature,
     #[error("ByteRange manquant ou invalide")]
-    ByteRangeMissing,
+    ByteRange,
     #[error("Contents manquant")]
-    ContentsMissing,
+    Contents,
 }
+
 
 pub fn verify_pdf_pades(
     pdf_path: &str,
@@ -27,18 +28,18 @@ pub fn verify_pdf_pades(
     let doc = Document::load_mem(&pdf_bytes).context("Chargement PDF a échoué")?;
 
     let (_sig_obj_id, sig_dict) = find_signature_dict(&doc)
-        .map_err(|_| PdfErr::SignatureMissing)
+        .map_err(|_| PdfErr::Signature)
         .context("Aucune signature PDF détectée")?;
 
     // API lopdf (Result<&Object, Error>)
     let byte_range_obj = sig_dict
         .get(b"ByteRange")
-        .map_err(|_| PdfErr::ByteRangeMissing)?;
+        .map_err(|_| PdfErr::ByteRange)?;
     let br = parse_byterange(byte_range_obj).context("ByteRange invalide")?;
 
     let contents_obj = sig_dict
         .get(b"Contents")
-        .map_err(|_| PdfErr::ContentsMissing)?;
+        .map_err(|_| PdfErr::Contents)?;
     let cms_blob = extract_contents(contents_obj).context("Contents invalide")?;
 
     // Intégrité: recomposer les segments ByteRange et hasher

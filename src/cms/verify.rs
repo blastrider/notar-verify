@@ -137,63 +137,63 @@ pub fn verify_cms_entrypoint(
         let _ = anchors_pem;
     }
 
-    // --- Branche OpenSSL ----------------------------------------------------
-    #[cfg(feature = "openssl-backend")]
-    {
-        if let Some(ref dat) = data {
-            match openssl_impl::verify_detached(&sig_der, dat, anchors_pem) {
-                Ok((chain_dns, signer_dn)) => {
-                    r.signature = Component {
+// --- Branche OpenSSL ----------------------------------------------------
+#[cfg(feature = "openssl-backend")]
+{
+    if let Some(ref dat) = data {
+        match openssl_impl::verify_detached(&sig_der, dat, anchors_pem) {
+            Ok((chain_dns, signer_dn)) => {
+                r.signature = Component {
+                    status: ReportVerdict::Valid,
+                    detail: "PKCS#7 détaché valide".into(),
+                };
+                r.integrity = Component {
+                    status: ReportVerdict::Valid,
+                    detail: "MessageDigest/Data vérifiés".into(),
+                };
+                if !anchors_pem.is_empty() {
+                    r.chain = Component {
                         status: ReportVerdict::Valid,
-                        detail: "PKCS#7 détaché valide".into(),
+                        detail: "Chaîne vérifiée contre les anchors fournis".into(),
                     };
-                    r.integrity = Component {
-                        status: ReportVerdict::Valid,
-                        detail: "MessageDigest/Data vérifiés".into(),
-                    };
-                    if !anchors_pem.is_empty() {
-                        r.chain = Component {
-                            status: ReportVerdict::Valid,
-                            detail: "Chaîne vérifiée contre les anchors fournis".into(),
-                        };
-                    } else {
-                        r.chain = Component {
-                            status: ReportVerdict::Warning,
-                            detail: "Aucun anchor fourni (--trust), chaîne non attestée".into(),
-                        };
-                    }
-                    r.signer_dn = signer_dn;
-                    r.certificate_chain = chain_dns;
-
-                    r.revocation = Component {
-                        status: ReportVerdict::Warning,
-                        detail: "Non évaluée (offline par défaut)".into(),
-                    };
-                    r.ltv = Component {
-                        status: ReportVerdict::Warning,
-                        detail: "Non applicable (CMS détaché)".into(),
-                    };
-                }
-                Err(e) => {
-                    r.signature = Component {
-                        status: ReportVerdict::Invalid,
-                        detail: format!("Échec vérif PKCS#7: {e}"),
-                    };
+                } else {
                     r.chain = Component {
                         status: ReportVerdict::Warning,
-                        detail: "Chaîne non évaluée".into(),
+                        detail: "Aucun anchor fourni (--trust), chaîne non attestée".into(),
                     };
                 }
+                r.signer_dn = signer_dn;
+                r.certificate_chain = chain_dns;
+
+                r.revocation = Component {
+                    status: ReportVerdict::Warning,
+                    detail: "Non évaluée (offline par défaut)".into(),
+                };
+                r.ltv = Component {
+                    status: ReportVerdict::Warning,
+                    detail: "Non applicable (CMS détaché)".into(),
+                };
             }
-        } else {
-            r.signature = Component {
-                status: ReportVerdict::Warning,
-                detail: "P7M enveloppé non implémenté dans MVP".into(),
-            };
+            Err(e) => {
+                r.signature = Component {
+                    status: ReportVerdict::Invalid,
+                    detail: format!("Échec vérif PKCS#7: {e}"),
+                };
+                r.chain = Component {
+                    status: ReportVerdict::Warning,
+                    detail: "Chaîne non évaluée".into(),
+                };
+            }
         }
-        final_verdict(&mut r);
-        return Ok(r);
+    } else {
+        r.signature = Component {
+            status: ReportVerdict::Warning,
+            detail: "P7M enveloppé non implémenté dans MVP".into(),
+        };
     }
+    final_verdict(&mut r);
+    Ok(r)
+}
 
     // --- Branche SANS OpenSSL -----------------------------------------------
     #[cfg(not(feature = "openssl-backend"))]

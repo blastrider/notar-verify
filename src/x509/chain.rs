@@ -5,6 +5,7 @@ pub struct ChainResult {
     pub subjects: Vec<String>,
 }
 
+#[allow(dead_code)]
 #[cfg(feature = "openssl-backend")]
 pub fn validate_chain_openssl(_anchors_pem: &[String]) -> ChainResult {
     // MVP: la vérification de chaîne avancée est généralement couverte lors de la vérif PKCS7.
