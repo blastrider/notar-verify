@@ -1,6 +1,5 @@
 ---
 source: tests/integration_report.rs
-assertion_line: 34
 expression: json
 ---
 {
@@ -12,7 +11,7 @@ expression: json
   "timestamp_rfc3161": null,
   "revocation": {
     "status": "WARNING",
-    "detail": "Non évaluée (MVP offline)"
+    "detail": "Révocation offline non évaluée (MVP). Fournir CRL/OCSP et activer backend ultérieurement."
   },
   "integrity": {
     "status": "WARNING",
@@ -28,7 +27,7 @@ expression: json
   },
   "ltv": {
     "status": "WARNING",
-    "detail": "Non applicable (CMS détaché)"
+    "detail": ""
   },
   "verdict": "WARNING",
   "document_sha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"

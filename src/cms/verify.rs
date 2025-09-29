@@ -195,26 +195,33 @@ pub fn verify_cms_entrypoint(
         Ok(r)
     }
 
-    // --- Branche SANS OpenSSL -----------------------------------------------
-    #[cfg(not(feature = "openssl-backend"))]
-    {
-        let _ = &sig_der; // éviter unused
-        let _ = anchors_pem;
+// --- Branche SANS OpenSSL -----------------------------------------------
+#[cfg(not(feature = "openssl-backend"))]
+{
+    let _ = &sig_der; // éviter unused
+    let _ = anchors_pem;
 
-        r.signature = Component {
-            status: ReportVerdict::Warning,
-            detail: "Pile native CMS non activée : utilisez --features openssl-backend pour une vérification cryptographique complète.".into(),
-        };
-        r.chain = Component {
-            status: ReportVerdict::Warning,
-            detail: "Validation de chaîne limitée sans backend X.509 avancé.".into(),
-        };
-        r.revocation.detail = "Non évaluée (MVP offline)".into();
-        r.ltv.detail = "Non applicable (CMS détaché)".into();
+    r.signature = Component {
+        status: ReportVerdict::Warning,
+        detail: "Pile native CMS non activée : utilisez --features openssl-backend pour une vérification cryptographique complète.".into(),
+    };
+    r.chain = Component {
+        status: ReportVerdict::Warning,
+        detail: "Validation de chaîne limitée sans backend X.509 avancé.".into(),
+    };
+    r.revocation = Component {
+        status: ReportVerdict::Warning,
+        detail: "Révocation offline non évaluée (MVP). Fournir CRL/OCSP et activer backend ultérieurement.".into(),
+    };
+    r.ltv = Component {
+        status: ReportVerdict::Warning,
+        detail: "".into(),
+    };
 
-        final_verdict(&mut r);
-        Ok(r)
-    }
+    final_verdict(&mut r);
+    Ok(r)
+}
+
 }
 
 fn extract_pem_block(pem: &str, _label: &str) -> Result<Vec<u8>> {
