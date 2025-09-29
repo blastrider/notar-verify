@@ -15,7 +15,6 @@ pub enum PdfErr {
     Contents,
 }
 
-
 pub fn verify_pdf_pades(
     pdf_path: &str,
     anchors_pem: &[String],
@@ -32,14 +31,10 @@ pub fn verify_pdf_pades(
         .context("Aucune signature PDF détectée")?;
 
     // API lopdf (Result<&Object, Error>)
-    let byte_range_obj = sig_dict
-        .get(b"ByteRange")
-        .map_err(|_| PdfErr::ByteRange)?;
+    let byte_range_obj = sig_dict.get(b"ByteRange").map_err(|_| PdfErr::ByteRange)?;
     let br = parse_byterange(byte_range_obj).context("ByteRange invalide")?;
 
-    let contents_obj = sig_dict
-        .get(b"Contents")
-        .map_err(|_| PdfErr::Contents)?;
+    let contents_obj = sig_dict.get(b"Contents").map_err(|_| PdfErr::Contents)?;
     let cms_blob = extract_contents(contents_obj).context("Contents invalide")?;
 
     // Intégrité: recomposer les segments ByteRange et hasher
