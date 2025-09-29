@@ -1,0 +1,35 @@
+---
+source: tests/integration_report.rs
+assertion_line: 34
+expression: json
+---
+{
+  "input_kind": "CMS",
+  "algorithms": [],
+  "signer_dn": null,
+  "certificate_chain": [],
+  "signing_time": null,
+  "timestamp_rfc3161": null,
+  "revocation": {
+    "status": "WARNING",
+    "detail": "Non évaluée (MVP offline)"
+  },
+  "integrity": {
+    "status": "WARNING",
+    "detail": ""
+  },
+  "signature": {
+    "status": "WARNING",
+    "detail": "Pile native CMS non activée : utilisez --features openssl-backend pour une vérification cryptographique complète."
+  },
+  "chain": {
+    "status": "WARNING",
+    "detail": "Validation de chaîne limitée sans backend X.509 avancé."
+  },
+  "ltv": {
+    "status": "WARNING",
+    "detail": "Non applicable (CMS détaché)"
+  },
+  "verdict": "WARNING",
+  "document_sha256": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+}

@@ -12,7 +12,7 @@ fn cli_shows_warning_without_backend() {
     let out = dir.path().join("report.json");
 
     let mut cmd = Command::cargo_bin("notar-verify").unwrap();
-    let assert = cmd
+    let _assert = cmd
         .arg("--sig")
         .arg(sig)
         .arg("--data")
