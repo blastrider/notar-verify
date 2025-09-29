@@ -213,7 +213,7 @@ pub fn verify_cms_entrypoint(
         r.ltv.detail = "Non applicable (CMS détaché)".into();
 
         final_verdict(&mut r);
-        return Ok(r);
+        Ok(r)
     }
 }
 
